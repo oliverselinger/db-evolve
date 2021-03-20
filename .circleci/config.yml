@@ -1,0 +1,81 @@
+version: 2.1
+
+commands:
+  install-dockerize:
+    steps:
+      - run:
+          name: install dockerize
+          command: wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && sudo tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+          environment:
+            DOCKERIZE_VERSION: v0.3.0
+  maven-package:
+    steps:
+      - checkout
+      - restore_cache:
+          key: db-evolve-{{ checksum "pom.xml" }}
+      - run: mvn dependency:go-offline
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: db-evolve-{{ checksum "pom.xml" }}
+      - run: mvn package
+      - store_test_results:
+          path: target/surefire-reports
+      - run: bash <(curl -s https://codecov.io/bash)
+
+jobs:
+  jdk-8-build:
+    docker:
+      - image: circleci/openjdk:8-jdk-stretch
+    steps:
+      - maven-package
+
+  jdk-11-build:
+    docker:
+      - image: circleci/openjdk:11-jdk-stretch
+    steps:
+      - maven-package
+
+  test-postgres:
+    docker:
+      - image: circleci/openjdk:8-jdk-stretch
+      - image: circleci/postgres:12-alpine
+        environment:
+          POSTGRES_USER: dbevolve
+          POSTGRES_PASSWORD: dbevolve
+          POSTGRES_DB: dbevolve
+    environment:
+      TEST_DB: POSTGRES
+    steps:
+      - install-dockerize
+      - run:
+          name: Wait for db
+          command: dockerize -wait tcp://localhost:5432 -timeout 1m
+      - maven-package
+
+  test-mysql:
+    docker:
+      - image: circleci/openjdk:8-jdk-stretch
+      - image: circleci/mysql:8.0.4
+        environment:
+          MYSQL_ROOT_PASSWORD: dbevolve
+          MYSQL_DATABASE: dbevolve
+          MYSQL_USER: dbevolve
+          MYSQL_PASSWORD: dbevolve
+    environment:
+      TEST_DB: MYSQL
+    steps:
+      - install-dockerize
+      - run:
+          name: Wait for db
+          command: dockerize -wait tcp://localhost:3306 -timeout 1m
+      - maven-package
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - jdk-8-build
+      - jdk-11-build
+      - test-postgres
+      - test-mysql

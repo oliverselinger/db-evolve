@@ -55,3 +55,17 @@ and the Jitpack repository
 DbEvolve dbEvolve = new DbEvolve(dataSource);
 dbEvolve.migrate();
 ```
+
+## FAQ
+
+#### Is it running in production?
+
+No.
+
+#### What Java versions are supported?
+
+Requires Java 11+.
+
+#### What databases are supported?
+
+It is tested with Postgres, MySql and H2.

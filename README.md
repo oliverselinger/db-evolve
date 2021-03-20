@@ -3,7 +3,7 @@
 [![](https://img.shields.io/maven-central/v/com.github.oliverselinger/db-evolve)]()
 [![](https://jitpack.io/v/oliverselinger/db-evolve.svg)](https://jitpack.io/#oliverselinger/db-evolve)
 [![CircleCI](https://circleci.com/gh/oliverselinger/db-evolve.svg?style=svg)](https://circleci.com/gh/oliverselinger/db-evolve)
-[![codecov](https://codecov.io/gh/oliverselinger/db-evolve/branch/master/graph/badge.svg)](https://codecov.io/gh/oliverselinger/db-evolve)
+[![codecov](https://codecov.io/gh/oliverselinger/db-evolve/branch/main/graph/badge.svg?token=K68CRS0CFQ)](https://codecov.io/gh/oliverselinger/db-evolve)
 
 Database schema evolution with plain SQL.
 
@@ -31,7 +31,7 @@ Inspired by this project: https://github.com/cinemast/dbolve
 <dependency>
     <groupId>com.github.oliverselinger</groupId>
     <artifactId>db-evolve</artifactId>
-    <version>1.0.0</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 

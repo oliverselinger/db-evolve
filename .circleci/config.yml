@@ -24,11 +24,6 @@ commands:
       - run: bash <(curl -s https://codecov.io/bash)
 
 jobs:
-  jdk-8-build:
-    docker:
-      - image: circleci/openjdk:8-jdk-stretch
-    steps:
-      - maven-package
 
   jdk-11-build:
     docker:
@@ -38,7 +33,7 @@ jobs:
 
   test-postgres:
     docker:
-      - image: circleci/openjdk:8-jdk-stretch
+      - image: circleci/openjdk:11-jdk-stretch
       - image: circleci/postgres:12-alpine
         environment:
           POSTGRES_USER: dbevolve
@@ -55,7 +50,7 @@ jobs:
 
   test-mysql:
     docker:
-      - image: circleci/openjdk:8-jdk-stretch
+      - image: circleci/openjdk:11-jdk-stretch
       - image: circleci/mysql:8.0.4
         environment:
           MYSQL_ROOT_PASSWORD: dbevolve
@@ -75,7 +70,6 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - jdk-8-build
       - jdk-11-build
       - test-postgres
       - test-mysql

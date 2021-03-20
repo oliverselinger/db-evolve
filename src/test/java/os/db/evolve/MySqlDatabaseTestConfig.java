@@ -5,8 +5,8 @@ import java.sql.SQLException;
 class MySqlDatabaseTestConfig implements DatabaseTestConfig {
 
     public void clearDb(QueryRunner queryRunner) throws SQLException {
-        queryRunner.execute("DROP DATABASE dbevolve;" +
-                "CREATE DATABASE dbevolve;");
+        queryRunner.execute("DROP DATABASE dbevolve;");
+        queryRunner.execute("CREATE DATABASE dbevolve;");
     }
 
     public String user() {

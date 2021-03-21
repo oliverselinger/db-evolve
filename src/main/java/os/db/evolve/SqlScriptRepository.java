@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.util.List;
 import java.util.Optional;
 
 class SqlScriptRepository {
@@ -17,6 +18,11 @@ class SqlScriptRepository {
     Optional<SqlScript> find(String fileName) throws SQLException {
         String selectStmt = "SELECT * FROM DB_EVOLVE WHERE NAME = ?";
         return Optional.ofNullable(queryRunner.selectOne(selectStmt, this::mapToSqlScript, fileName));
+    }
+
+    List<SqlScript> findAll() throws SQLException {
+        String selectStmt = "SELECT * FROM DB_EVOLVE ORDER BY TIMESTAMP";
+        return queryRunner.selectAll(selectStmt, this::mapToSqlScript);
     }
 
     void save(Connection connection, SqlScript sqlScript) throws SQLException {

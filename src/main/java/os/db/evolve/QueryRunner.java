@@ -47,7 +47,13 @@ class QueryRunner {
         }
     }
 
-    public <T> List<T> selectAll(Connection connection, String sql, RowMapper<T> rowMapper, Object[] params) throws SQLException {
+    public <T> List<T> selectAll(String sql, RowMapper<T> rowMapper, Object... params) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            return selectAll(connection, sql, rowMapper, params);
+        }
+    }
+
+    public <T> List<T> selectAll(Connection connection, String sql, RowMapper<T> rowMapper, Object... params) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             int cnt = 0;
 

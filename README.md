@@ -49,6 +49,10 @@ and the Jitpack repository
 
 `V<Version>__<Description>.sql`
 
+`<Version>` must be an integer literal. This number is used to determine the order of execution (sorted numerically not lexicographically). 
+
+Inside the file between each statement there must be at least one empty line. Empty lines are used to delimit the sql statements.
+
 3. Instantiate `DbEvolve`, which can then be used to start the migration of your database.
 
 ```java
@@ -57,6 +61,10 @@ dbEvolve.migrate();
 ```
 
 ## FAQ
+
+#### Sql comments
+
+Single line comments indicated with `--` are supported. Multi-line comments not!
 
 #### Is it running in production?
 

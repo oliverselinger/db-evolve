@@ -81,23 +81,8 @@ public class DbEvolve {
     }
 
     private void createTablesIfNotExist() {
-        try {
-            queryRunner.execute("CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name));");
-        } catch (SQLException throwables) {
-            // ignore => assumption table already exist. If not migration will fail anyway.
-            return;
-        }
-
-        try {
-            queryRunner.execute("CREATE TABLE DB_EVOLVE_LOCK (lock BOOLEAN, timestamp TIMESTAMP, PRIMARY KEY (lock));");
-            queryRunner.executeUpdate("INSERT INTO DB_EVOLVE_LOCK (LOCK,TIMESTAMP) VALUES (FALSE, ?)", Timestamp.valueOf(LocalDateTime.now()));
-        } catch (SQLException throwables) {
-            // ignore => assumption table already exist. If not migration will fail anyway.
-        }
-    }
-
-    private void unlock() {
-
+        sqlScriptRepository.createTable();
+        lockRepository.createTable();
     }
 
     private List<Path> findAllSqlFiles() throws URISyntaxException, IOException {
@@ -134,14 +119,20 @@ public class DbEvolve {
              InputStreamReader inReader = new InputStreamReader(contentAsStream);
              BufferedReader reader = new BufferedReader(inReader)) {
 
+            int lineNumber = 0;
             StringBuilder statement = new StringBuilder();
 
             while (true) {
                 String line = reader.readLine();
+                lineNumber++;
 
                 if (line == null || line.trim().isEmpty()) {
                     if (statement.length() > 0) {
-                        queryRunner.execute(connection, statement.toString().trim());
+                        try {
+                            queryRunner.execute(connection, statement.toString().trim());
+                        } catch (SQLException e) {
+                            throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", sqlFile.getFileName(), lineNumber-1), e);
+                        }
                         statement.setLength(0);
                     }
 

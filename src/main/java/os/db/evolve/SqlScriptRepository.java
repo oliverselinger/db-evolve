@@ -15,6 +15,15 @@ class SqlScriptRepository {
         this.queryRunner = queryRunner;
     }
 
+    void createTable() {
+        try {
+            queryRunner.execute("CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name));");
+        } catch (SQLException throwables) {
+            // ignore => assumption table already exist. If not migration will fail anyway.
+            return;
+        }
+    }
+
     Optional<SqlScript> find(String fileName) throws SQLException {
         String selectStmt = "SELECT * FROM DB_EVOLVE WHERE NAME = ?";
         return Optional.ofNullable(queryRunner.selectOne(selectStmt, this::mapToSqlScript, fileName));

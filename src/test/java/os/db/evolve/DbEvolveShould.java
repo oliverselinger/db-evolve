@@ -139,4 +139,11 @@ public class DbEvolveShould {
         migrated = dbEvolve.migrate();
         assertTrue(migrated);
     }
+
+    @Test
+    void throw_an_exception_if_sql_stmt_is_invalid() {
+        DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_invalid_stmt");
+        MigrationException migrationException = assertThrows(MigrationException.class, dbEvolve::migrate);
+        assertEquals(migrationException.getMessage(), "V1__create_tables.sql - Invalid sql statement found at line 12");
+    }
 }

@@ -9,7 +9,7 @@ Database schema evolution with plain SQL.
 
 ## Features
 
-* **Persistence** Requires only one database-table.
+* **Persistence** requires two database tables.
 * **Reliable** execution. Guarantees each script is applied exactly once.
 * **Multi-node compatible**. Coordination between nodes with locking.
 * **Lightweight**. Very small code base.
@@ -31,7 +31,7 @@ Inspired by this project: https://github.com/cinemast/dbolve
 <dependency>
     <groupId>com.github.oliverselinger</groupId>
     <artifactId>db-evolve</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -60,11 +60,17 @@ DbEvolve dbEvolve = new DbEvolve(dataSource);
 dbEvolve.migrate();
 ```
 
+On instantiation of DbEvolve the two tables `DB_EVOLVE` and `DB_EVOLVE_LOCK` for state control are created. If they already exist, creation is simply skipped.  
+
 ## FAQ
 
 #### Sql comments
 
 Single line comments indicated with `--` are supported. Multi-line comments not!
+
+#### Can I change the content of an already applied migration script?
+
+No! A content change also changes the hash value, and you will receive an exception. However, instead create a new script.
 
 #### Is it running in production?
 

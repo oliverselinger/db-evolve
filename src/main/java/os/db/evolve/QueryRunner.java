@@ -73,6 +73,12 @@ class QueryRunner {
         }
     }
 
+    public int executeUpdate(String sql, Object... params) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            return executeUpdate(connection, sql, params);
+        }
+    }
+
     public int executeUpdate(Connection connection, String sql, Object... params) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
 

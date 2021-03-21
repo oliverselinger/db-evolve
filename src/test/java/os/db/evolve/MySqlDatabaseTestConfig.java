@@ -7,6 +7,8 @@ class MySqlDatabaseTestConfig implements DatabaseTestConfig {
     public void clearDb(QueryRunner queryRunner) throws SQLException {
         queryRunner.execute("DROP TABLE IF EXISTS TEST1;");
         queryRunner.execute("DROP TABLE IF EXISTS TEST2;");
+        queryRunner.execute("DROP TABLE IF EXISTS DB_EVOLVE_LOCK;");
+        queryRunner.execute("DROP TABLE IF EXISTS DB_EVOLVE;");
     }
 
     public String user() {

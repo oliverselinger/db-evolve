@@ -15,11 +15,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.locks.Lock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -33,6 +35,7 @@ public class DbEvolve {
     private final DataSource dataSource;
     private final String classpathDirectory;
     private final QueryRunner queryRunner;
+    private final LockRepository lockRepository;
     private final SqlScriptRepository sqlScriptRepository;
     private final MessageDigest digest;
 
@@ -44,6 +47,7 @@ public class DbEvolve {
         this.dataSource = dataSource;
         this.classpathDirectory = classpathDirectory;
         this.queryRunner = new QueryRunner(dataSource);
+        this.lockRepository = new LockRepository(queryRunner);
         this.sqlScriptRepository = new SqlScriptRepository(queryRunner);
         try {
             this.digest = MessageDigest.getInstance("SHA-256");
@@ -53,8 +57,15 @@ public class DbEvolve {
         createTablesIfNotExist();
     }
 
-    public void migrate() {
-        try {
+    public boolean migrate() {
+        try (DbLock dbLock = new DbLock(lockRepository)){
+
+            boolean lock = dbLock.lock();
+            if (!lock) {
+                System.out.println("Db-Evolve skipping migration due to locked database.");
+                return false;
+            }
+
             List<Path> sqlFiles = findAllSqlFiles();
 
             for (Path sqlFile : sqlFiles) {
@@ -65,6 +76,8 @@ public class DbEvolve {
         } catch (Exception e) {
             throw new MigrationException(e);
         }
+
+        return true;
     }
 
     private void createTablesIfNotExist() {
@@ -72,7 +85,19 @@ public class DbEvolve {
             queryRunner.execute("CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name));");
         } catch (SQLException throwables) {
             // ignore => assumption table already exist. If not migration will fail anyway.
+            return;
         }
+
+        try {
+            queryRunner.execute("CREATE TABLE DB_EVOLVE_LOCK (lock BOOLEAN, timestamp TIMESTAMP, PRIMARY KEY (lock));");
+            queryRunner.executeUpdate("INSERT INTO DB_EVOLVE_LOCK (LOCK,TIMESTAMP) VALUES (FALSE, ?)", Timestamp.valueOf(LocalDateTime.now()));
+        } catch (SQLException throwables) {
+            // ignore => assumption table already exist. If not migration will fail anyway.
+        }
+    }
+
+    private void unlock() {
+
     }
 
     private List<Path> findAllSqlFiles() throws URISyntaxException, IOException {

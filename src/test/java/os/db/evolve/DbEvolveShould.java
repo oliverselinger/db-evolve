@@ -7,8 +7,13 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import javax.sql.DataSource;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -115,5 +120,23 @@ public class DbEvolveShould {
 
         List<SqlScript> scripts = sqlScriptRepository.findAll();
         assertEquals(2, scripts.size());
+    }
+
+    @Test
+    void not_start_the_migration_if_db_is_locked() throws SQLException {
+        DbEvolve dbEvolve = new DbEvolve(dataSource);
+
+        LockRepository lockRepository = new LockRepository(queryRunner);
+        boolean locked = lockRepository.lock();
+        assertTrue(locked);
+
+        boolean migrated = dbEvolve.migrate();
+        assertFalse(migrated);
+
+        boolean unlocked = lockRepository.unlock();
+        assertTrue(unlocked);
+
+        migrated = dbEvolve.migrate();
+        assertTrue(migrated);
     }
 }

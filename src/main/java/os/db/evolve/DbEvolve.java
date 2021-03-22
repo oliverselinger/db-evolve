@@ -54,7 +54,7 @@ public class DbEvolve {
     }
 
     public boolean migrate() {
-        try (DbLock dbLock = new DbLock(lockRepository)){
+        try (DbLock dbLock = new DbLock(lockRepository)) {
 
             boolean lock = dbLock.lock();
             if (!lock) {
@@ -63,9 +63,23 @@ public class DbEvolve {
             }
 
             List<Path> sqlFiles = findAllSqlFiles();
+            List<SqlScript> sqlScripts = sqlScriptRepository.findAll();
 
             for (Path sqlFile : sqlFiles) {
-                migrateSqlFile(sqlFile);
+
+                byte[] content = Files.readAllBytes(sqlFile);
+                String currentHash = hash(content);
+
+                Optional<SqlScript> sqlScript = sqlScripts.stream()
+                        .filter(script -> script.getName().equals(sqlFile.getFileName().toString()))
+                        .findFirst();
+
+                if (sqlScript.isPresent()) {
+                    validateFingerprint(sqlScript.get(), currentHash);
+                    continue;
+                }
+
+                migrateSqlFile(new SqlScript(sqlFile.getFileName().toString(), currentHash, LocalDateTime.now()), content);
             }
         } catch (MigrationException e) {
             throw e;
@@ -95,19 +109,14 @@ public class DbEvolve {
                 .collect(Collectors.toList());
     }
 
-    private void migrateSqlFile(Path sqlFile) throws IOException, SQLException {
-        byte[] content = Files.readAllBytes(sqlFile);
-        String currentHash = hash(content);
-
-        Optional<SqlScript> sqlScript = sqlScriptRepository.find(sqlFile.getFileName().toString());
-        if (sqlScript.isPresent()) {
-            // validate fingerprint
-            if (!currentHash.equals(sqlScript.get().getHash())) {
-                throw new MigrationException(String.format("Content of %s has changed", sqlFile));
-            }
-
-            return;
+    private void validateFingerprint(SqlScript sqlScript, String currentHash) {
+        // validate fingerprint
+        if (!currentHash.equals(sqlScript.getHash())) {
+            throw new MigrationException(String.format("Content of %s has changed", sqlScript.getName()));
         }
+    }
+
+    private void migrateSqlFile(SqlScript toMigrate, byte[] content) throws IOException, SQLException {
 
         try (Connection connection = dataSource.getConnection();
              Transaction transaction = new Transaction(connection);
@@ -115,43 +124,37 @@ public class DbEvolve {
              InputStreamReader inReader = new InputStreamReader(contentAsStream);
              BufferedReader reader = new BufferedReader(inReader)) {
 
-            int lineNumber = 0;
-            StringBuilder statement = new StringBuilder();
+            parseAndExecuteStatements(toMigrate, connection, reader);
 
-            while (true) {
-                String line = reader.readLine();
-                lineNumber++;
-
-                if (line == null || line.trim().isEmpty()) {
-                    if (statement.length() > 0) {
-                        try {
-                            queryRunner.execute(connection, statement.toString().trim());
-                        } catch (SQLException e) {
-                            throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", sqlFile.getFileName(), lineNumber-1), e);
-                        }
-                        statement.setLength(0);
-                    }
-
-                    if (line == null) {
-                        break;
-                    }
-
-                    if (line.trim().isEmpty()) {
-                        continue;
-                    }
-                }
-
-                if (line.startsWith("--")) { // skip single line comments
-                    continue;
-                }
-
-                statement.append(" ").append(line);
-            }
-
-            SqlScript toSave = new SqlScript(sqlFile.getFileName().toString(), currentHash, LocalDateTime.now());
-            sqlScriptRepository.save(connection, toSave);
+            sqlScriptRepository.save(connection, toMigrate);
 
             transaction.commit();
+        }
+    }
+
+    private void parseAndExecuteStatements(SqlScript toMigrate, Connection connection, BufferedReader reader) throws IOException {
+        StatementParser parser = new StatementParser();
+
+        int lineNumber = 0;
+        while (true) {
+            String line = reader.readLine();
+            lineNumber++;
+
+            parser.accept(line, lineNumber);
+
+            if (parser.isComplete()) {
+                try {
+                    queryRunner.execute(connection, parser.getStatement());
+                } catch (SQLException e) {
+                    throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", toMigrate.getName(), parser.getStartLineNumber()), e);
+                }
+
+                parser.reset();
+            }
+
+            if (line == null) {
+                break;
+            }
         }
     }
 

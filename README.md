@@ -62,6 +62,26 @@ dbEvolve.migrate();
 
 On instantiation of DbEvolve the two tables `DB_EVOLVE` and `DB_EVOLVE_LOCK` for state control are created. If they already exist, creation is simply skipped.  
 
+## Scripts
+
+The migration scripts can be written in SQL with database-specific syntax. As default, statements are delimited by `;` at the end of the line. New lines and single line comments are ignored.
+
+For statements where the end is not indicated by a semicolon, e.g. PL-SQL scripts, the end delimiter can be overridden by a specific single line comment to use an empty new line as end indicator. For example:
+
+```
+INSERT INTO TEST VALUES (1);
+
+-- ###_NEW_LINE_END_DELIMITER_ON_###
+BEGIN
+dbms_output.put_line (‘Hello World..');
+END;
+/
+
+INSERT INTO TEST VALUES (2);
+```
+
+This would result in the execution of 3 statements. First an insert, second the PL-SQL script and third again an insert.
+
 ## FAQ
 
 #### Sql comments

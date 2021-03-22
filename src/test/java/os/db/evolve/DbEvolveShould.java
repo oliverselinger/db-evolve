@@ -7,13 +7,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import javax.sql.DataSource;
 import java.nio.file.Path;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -144,6 +139,6 @@ public class DbEvolveShould {
     void throw_an_exception_if_sql_stmt_is_invalid() {
         DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_invalid_stmt");
         MigrationException migrationException = assertThrows(MigrationException.class, dbEvolve::migrate);
-        assertEquals(migrationException.getMessage(), "V1__create_tables.sql - Invalid sql statement found at line 12");
+        assertEquals(migrationException.getMessage(), "V1__create_tables.sql - Invalid sql statement found at line 9");
     }
 }

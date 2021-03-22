@@ -24,11 +24,6 @@ class SqlScriptRepository {
         }
     }
 
-    Optional<SqlScript> find(String fileName) throws SQLException {
-        String selectStmt = "SELECT * FROM DB_EVOLVE WHERE NAME = ?";
-        return Optional.ofNullable(queryRunner.selectOne(selectStmt, this::mapToSqlScript, fileName));
-    }
-
     List<SqlScript> findAll() throws SQLException {
         String selectStmt = "SELECT * FROM DB_EVOLVE ORDER BY TIMESTAMP";
         return queryRunner.selectAll(selectStmt, this::mapToSqlScript);

@@ -22,7 +22,7 @@ Migrations are versioned by providing a unique name by you and a calculated hash
 
 All statements of a script file run within a single database transaction.
 
-Inspired by this project: https://github.com/cinemast/dbolve
+Inspired by [Dbolve](https://github.com/cinemast/dbolve) and [Flyway](https://flywaydb.org)
 
 ## Getting started
 

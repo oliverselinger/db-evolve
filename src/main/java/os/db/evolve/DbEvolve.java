@@ -6,7 +6,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
-import java.net.URL;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -98,12 +100,21 @@ public class DbEvolve {
     private List<Path> findAllSqlFiles() throws URISyntaxException, IOException {
         ClassLoader classLoader = getClass().getClassLoader();
 
-        URL resource = classLoader.getResource(classpathDirectory);
-        if (resource == null) {
+        var uri = classLoader.getResource(classpathDirectory).toURI();
+        if (uri == null) {
             throw new MigrationException(String.format("No migrations found. Directory %s is not on classpath.", classpathDirectory));
         }
 
-        return Files.walk(Paths.get(resource.toURI()))
+        Path path;
+        //Check if we are in a jar file
+        if (uri.getScheme().equals("jar")) {
+            FileSystem fileSystem = FileSystems.newFileSystem(uri, Collections.emptyMap());
+            path = fileSystem.getPath(classpathDirectory);
+        } else {
+            path = Paths.get(uri);
+        }
+
+        return Files.walk(path)
                 .filter(Files::isRegularFile)
                 .sorted(VERSION_COMPARATOR) // FIXME lexographic sorting dow not work with 1_ to 10_
                 .collect(Collectors.toList());

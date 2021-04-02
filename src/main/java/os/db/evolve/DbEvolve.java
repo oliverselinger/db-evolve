@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -36,22 +37,28 @@ public class DbEvolve {
     private final LockRepository lockRepository;
     private final SqlScriptRepository sqlScriptRepository;
     private final MessageDigest digest;
+    private final Logger logger;
 
     public DbEvolve(DataSource dataSource) {
-        this(dataSource, DEFAULT_CLASSPATH_DIRECTORY);
+        this(dataSource, DEFAULT_CLASSPATH_DIRECTORY, null);
     }
 
-    public DbEvolve(DataSource dataSource, String classpathDirectory) {
+    public DbEvolve(DataSource dataSource, String classpathDirectory, Logger logger) {
+        if (logger == null) {
+            logger = new Logger() {};
+        }
+        this.logger = logger;
         this.dataSource = dataSource;
         this.classpathDirectory = classpathDirectory;
         this.queryRunner = new QueryRunner(dataSource);
-        this.lockRepository = new LockRepository(queryRunner);
-        this.sqlScriptRepository = new SqlScriptRepository(queryRunner);
+        this.lockRepository = new LockRepository(queryRunner, this.logger);
+        this.sqlScriptRepository = new SqlScriptRepository(queryRunner, this.logger);
         try {
             this.digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             throw new MigrationException(e);
         }
+
         createTablesIfNotExist();
     }
 
@@ -60,7 +67,7 @@ public class DbEvolve {
 
             boolean lock = dbLock.lock();
             if (!lock) {
-                System.out.println("Db-Evolve skipping migration due to locked database.");
+                logger.log(Level.INFO, "Db-Evolve skipping migration due to locked database.");
                 return false;
             }
 
@@ -116,7 +123,7 @@ public class DbEvolve {
 
         return Files.walk(path)
                 .filter(Files::isRegularFile)
-                .sorted(VERSION_COMPARATOR) // FIXME lexographic sorting dow not work with 1_ to 10_
+                .sorted(VERSION_COMPARATOR)
                 .collect(Collectors.toList());
     }
 
@@ -152,9 +159,9 @@ public class DbEvolve {
             lineNumber++;
 
             parser.accept(line, lineNumber);
-
             if (parser.isComplete()) {
                 try {
+                    logger.log(Level.INFO, String.format("Executing migration %s: %s", toMigrate.getName(), parser.getStatement().replace("\n", "").replace("\r", "")));
                     queryRunner.execute(connection, parser.getStatement());
                 } catch (SQLException e) {
                     throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", toMigrate.getName(), parser.getStartLineNumber()), e);

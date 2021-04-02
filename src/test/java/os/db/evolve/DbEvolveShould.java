@@ -29,12 +29,13 @@ public class DbEvolveShould {
     DataSource dataSource;
     QueryRunner queryRunner;
     SqlScriptRepository sqlScriptRepository;
+    Logger logger = new Logger() {};
 
     @BeforeEach
     void init() {
         dataSource = DB_EXTENSION.dataSource();
         queryRunner = new QueryRunner(dataSource);
-        sqlScriptRepository = new SqlScriptRepository(queryRunner);
+        sqlScriptRepository = new SqlScriptRepository(queryRunner, logger);
     }
 
     @Test
@@ -63,13 +64,13 @@ public class DbEvolveShould {
 
     @Test
     void throw_an_exception_if_directory_is_not_found_on_classpath() {
-        DbEvolve dbEvolve = new DbEvolve(dataSource, "not_existing");
+        DbEvolve dbEvolve = new DbEvolve(dataSource, "not_existing", null);
         assertThrows(MigrationException.class, dbEvolve::migrate);
     }
 
     @Test
     void throw_an_exception_if_file_name_does_not_meet_pattern() {
-        DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_wrong_file_name_pattern");
+        DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_wrong_file_name_pattern", null);
         assertThrows(MigrationException.class, dbEvolve::migrate);
     }
 
@@ -111,7 +112,7 @@ public class DbEvolveShould {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
         dbEvolve.migrate();
 
-        assertThrows(MigrationException.class, () -> new DbEvolve(dataSource, "sql_changed_file_content").migrate());
+        assertThrows(MigrationException.class, () -> new DbEvolve(dataSource, "sql_changed_file_content", null).migrate());
 
         List<SqlScript> scripts = sqlScriptRepository.findAll();
         assertEquals(2, scripts.size());
@@ -121,7 +122,7 @@ public class DbEvolveShould {
     void not_start_the_migration_if_db_is_locked() throws SQLException {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
 
-        LockRepository lockRepository = new LockRepository(queryRunner);
+        LockRepository lockRepository = new LockRepository(queryRunner, logger);
         boolean locked = lockRepository.lock();
         assertTrue(locked);
 
@@ -137,7 +138,7 @@ public class DbEvolveShould {
 
     @Test
     void throw_an_exception_if_sql_stmt_is_invalid() {
-        DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_invalid_stmt");
+        DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_invalid_stmt", null);
         MigrationException migrationException = assertThrows(MigrationException.class, dbEvolve::migrate);
         assertEquals(migrationException.getMessage(), "V1__create_tables.sql - Invalid sql statement found at line 9");
     }

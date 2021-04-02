@@ -3,13 +3,16 @@ package os.db.evolve;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.logging.Level;
 
 class LockRepository {
 
     private final QueryRunner queryRunner;
+    private final Logger logger;
 
-    LockRepository(QueryRunner queryRunner) {
+    LockRepository(QueryRunner queryRunner, Logger logger) {
         this.queryRunner = queryRunner;
+        this.logger = logger;
     }
 
     void createTable() {
@@ -18,6 +21,7 @@ class LockRepository {
             queryRunner.executeUpdate("INSERT INTO DB_EVOLVE_LOCK (DB_LOCK,TIMESTAMP) VALUES (0, ?)", Timestamp.valueOf(LocalDateTime.now()));
         } catch (SQLException throwables) {
             // ignore => assumption table already exist. If not migration will fail anyway.
+            logger.log(Level.FINER, throwables.getMessage());
         }
     }
 

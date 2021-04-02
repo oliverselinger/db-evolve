@@ -6,13 +6,16 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 
 class SqlScriptRepository {
 
     private final QueryRunner queryRunner;
+    private final Logger logger;
 
-    SqlScriptRepository(QueryRunner queryRunner) {
+    SqlScriptRepository(QueryRunner queryRunner, Logger logger) {
         this.queryRunner = queryRunner;
+        this.logger = logger;
     }
 
     void createTable() {
@@ -20,6 +23,7 @@ class SqlScriptRepository {
             queryRunner.execute("CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name));");
         } catch (SQLException throwables) {
             // ignore => assumption table already exist. If not migration will fail anyway.
+            logger.log(Level.FINER, throwables.getMessage());
             return;
         }
     }

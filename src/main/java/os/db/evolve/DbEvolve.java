@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -67,7 +66,7 @@ public class DbEvolve {
 
             boolean lock = dbLock.lock();
             if (!lock) {
-                logger.log(Level.INFO, "Db-Evolve skipping migration due to locked database.");
+                logger.log(Logger.Level.INFO, "Db-Evolve skipping migration due to locked database.");
                 return false;
             }
 
@@ -161,12 +160,11 @@ public class DbEvolve {
             parser.accept(line, lineNumber);
             if (parser.isComplete()) {
                 try {
-                    logger.log(Level.INFO, String.format("Executing migration %s: %s", toMigrate.getName(), parser.getStatement().replace("\n", "").replace("\r", "")));
-                    queryRunner.execute(connection, parser.getStatement());
+                    logger.log(Logger.Level.INFO, String.format("Executing migration %s: %s", toMigrate.getName(), parser.getStatement().replace("\n", "").replace("\r", "")));
+                    queryRunner.execute(connection, parser.getStatement().replace(';', ' ').trim());
                 } catch (SQLException e) {
                     throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", toMigrate.getName(), parser.getStartLineNumber()), e);
                 }
-
                 parser.reset();
             }
 

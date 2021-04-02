@@ -24,9 +24,9 @@ class QueryRunner {
     }
 
     public void execute(Connection connection, String... sqlStatements) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            for (String sqlStatement : sqlStatements) {
-                statement.execute(sqlStatement);
+        for (String sqlStatement : sqlStatements) {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(sqlStatement);
             }
         }
     }

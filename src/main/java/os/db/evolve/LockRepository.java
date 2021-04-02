@@ -14,7 +14,7 @@ class LockRepository {
 
     void createTable() {
         try {
-            queryRunner.execute("CREATE TABLE DB_EVOLVE_LOCK (DB_LOCK NUMBER(1), TIMESTAMP TIMESTAMP, PRIMARY KEY (DB_LOCK));");
+            queryRunner.execute("CREATE TABLE DB_EVOLVE_LOCK (DB_LOCK INTEGER, TIMESTAMP TIMESTAMP, PRIMARY KEY (DB_LOCK));");
             queryRunner.executeUpdate("INSERT INTO DB_EVOLVE_LOCK (DB_LOCK,TIMESTAMP) VALUES (0, ?)", Timestamp.valueOf(LocalDateTime.now()));
         } catch (SQLException throwables) {
             // ignore => assumption table already exist. If not migration will fail anyway.

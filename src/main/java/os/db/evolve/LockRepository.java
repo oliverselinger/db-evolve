@@ -14,8 +14,8 @@ class LockRepository {
 
     void createTable() {
         try {
-            queryRunner.execute("CREATE TABLE DB_EVOLVE_LOCK (DB_LOCK BOOLEAN, TIMESTAMP TIMESTAMP, PRIMARY KEY (DB_LOCK));");
-            queryRunner.executeUpdate("INSERT INTO DB_EVOLVE_LOCK (DB_LOCK,TIMESTAMP) VALUES (FALSE, ?)", Timestamp.valueOf(LocalDateTime.now()));
+            queryRunner.execute("CREATE TABLE DB_EVOLVE_LOCK (DB_LOCK NUMBER(1), TIMESTAMP TIMESTAMP, PRIMARY KEY (DB_LOCK));");
+            queryRunner.executeUpdate("INSERT INTO DB_EVOLVE_LOCK (DB_LOCK,TIMESTAMP) VALUES (0, ?)", Timestamp.valueOf(LocalDateTime.now()));
         } catch (SQLException throwables) {
             // ignore => assumption table already exist. If not migration will fail anyway.
         }
@@ -24,8 +24,8 @@ class LockRepository {
     boolean lock() throws SQLException {
         String updateStmt = "" +
                 "UPDATE DB_EVOLVE_LOCK" +
-                " SET DB_LOCK = TRUE, TIMESTAMP = ?" +
-                " WHERE DB_LOCK = FALSE";
+                " SET DB_LOCK = 1, TIMESTAMP = ?" +
+                " WHERE DB_LOCK = 0";
 
         int count = queryRunner.executeUpdate(updateStmt, Timestamp.valueOf(LocalDateTime.now()));
         return count == 1;
@@ -34,8 +34,8 @@ class LockRepository {
     boolean unlock() throws SQLException {
         String updateStmt = "" +
                 "UPDATE DB_EVOLVE_LOCK" +
-                " SET DB_LOCK = FALSE" +
-                " WHERE DB_LOCK = TRUE";
+                " SET DB_LOCK = 0" +
+                " WHERE DB_LOCK = 1";
 
         int count = queryRunner.executeUpdate(updateStmt);
         return count == 1;

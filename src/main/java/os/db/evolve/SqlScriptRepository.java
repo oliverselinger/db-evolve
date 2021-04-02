@@ -20,10 +20,10 @@ class SqlScriptRepository {
 
     void createTable() {
         try {
-            queryRunner.execute("CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name));");
+            queryRunner.execute("CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name))");
         } catch (SQLException throwables) {
             // ignore => assumption table already exist. If not migration will fail anyway.
-            logger.log(Level.FINER, throwables.getMessage());
+            logger.log(Logger.Level.DEBUG, throwables.getMessage());
             return;
         }
     }

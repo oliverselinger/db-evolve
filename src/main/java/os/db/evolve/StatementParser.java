@@ -39,6 +39,8 @@ class StatementParser {
 
         if(!newLineEndDelimiterEnabled && line.endsWith(";")) {
             statementComplete = true;
+            int length = statement.length();
+            statement.replace(length-2, length, "");
         }
     }
 

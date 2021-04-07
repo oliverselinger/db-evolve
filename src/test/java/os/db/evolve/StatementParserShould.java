@@ -19,7 +19,7 @@ public class StatementParserShould {
         parser.accept(line2, 2);
 
         assertTrue(parser.isComplete());
-        assertEquals(line1 + "\n" + line2, parser.getStatement());
+        assertEquals(line1 + "\n" + truncateSemicolon(line2), parser.getStatement());
         assertEquals(1, parser.getStartLineNumber());
     }
 
@@ -34,7 +34,7 @@ public class StatementParserShould {
         parser.accept(line2, 2);
 
         assertTrue(parser.isComplete());
-        assertEquals(line1 + "\n" + line2, parser.getStatement());
+        assertEquals(line1 + "\n" + truncateSemicolon(line2), parser.getStatement());
         assertEquals(1, parser.getStartLineNumber());
 
         parser.reset();
@@ -43,7 +43,7 @@ public class StatementParserShould {
         parser.accept(line3, 3);
 
         assertTrue(parser.isComplete());
-        assertEquals(line3, parser.getStatement());
+        assertEquals(truncateSemicolon(line3), parser.getStatement());
         assertEquals(3, parser.getStartLineNumber());
     }
 
@@ -59,7 +59,7 @@ public class StatementParserShould {
         parser.accept(null, 3);
 
         assertTrue(parser.isComplete());
-        assertEquals(line2, parser.getStatement());
+        assertEquals(truncateSemicolon(line2), parser.getStatement());
         assertEquals(2, parser.getStartLineNumber());
     }
 
@@ -74,7 +74,7 @@ public class StatementParserShould {
         parser.accept(line2, 2);
 
         assertTrue(parser.isComplete());
-        assertEquals(line2, parser.getStatement());
+        assertEquals(truncateSemicolon(line2), parser.getStatement());
         assertEquals(2, parser.getStartLineNumber());
     }
 
@@ -150,7 +150,7 @@ public class StatementParserShould {
         parser.accept(line1, 1);
 
         assertTrue(parser.isComplete());
-        assertEquals(line1, parser.getStatement());
+        assertEquals(truncateSemicolon(line1), parser.getStatement());
         assertEquals(1, parser.getStartLineNumber());
 
         parser.reset();
@@ -172,8 +172,11 @@ public class StatementParserShould {
         parser.accept(line9, 9);
 
         assertTrue(parser.isComplete());
-        assertEquals(line9, parser.getStatement());
+        assertEquals(truncateSemicolon(line9), parser.getStatement());
         assertEquals(9, parser.getStartLineNumber());
     }
 
+    private String truncateSemicolon(String line) {
+        return line.substring(0, line.length() - 1);
+    }
 }

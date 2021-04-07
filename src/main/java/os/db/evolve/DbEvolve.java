@@ -161,7 +161,7 @@ public class DbEvolve {
             if (parser.isComplete()) {
                 try {
                     logger.log(Logger.Level.INFO, String.format("Executing migration %s: %s", toMigrate.getName(), parser.getStatement().replace("\n", "").replace("\r", "")));
-                    queryRunner.execute(connection, parser.getStatement().replace(';', ' ').trim());
+                    queryRunner.execute(connection, parser.getStatement());
                 } catch (SQLException e) {
                     throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", toMigrate.getName(), parser.getStartLineNumber()), e);
                 }

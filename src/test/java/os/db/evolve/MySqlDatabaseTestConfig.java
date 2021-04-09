@@ -1,14 +1,20 @@
 package os.db.evolve;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 class MySqlDatabaseTestConfig implements DatabaseTestConfig {
 
-    public void clearDb(QueryRunner queryRunner) throws SQLException {
-        queryRunner.execute("DROP TABLE IF EXISTS TEST1;");
-        queryRunner.execute("DROP TABLE IF EXISTS TEST2;");
-        queryRunner.execute("DROP TABLE IF EXISTS DB_EVOLVE_LOCK;");
-        queryRunner.execute("DROP TABLE IF EXISTS DB_EVOLVE;");
+    public void clearDb(DataSource dataSource) throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS TEST1;");
+            statement.execute("DROP TABLE IF EXISTS TEST2;");
+            statement.execute("DROP TABLE IF EXISTS DB_EVOLVE_LOCK;");
+            statement.execute("DROP TABLE IF EXISTS DB_EVOLVE;");
+        }
     }
 
     public String user() {

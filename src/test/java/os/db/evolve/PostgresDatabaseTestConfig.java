@@ -1,12 +1,18 @@
 package os.db.evolve;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 class PostgresDatabaseTestConfig implements DatabaseTestConfig {
 
-    public void clearDb(QueryRunner queryRunner) throws SQLException {
-        queryRunner.execute("DROP SCHEMA public CASCADE;" +
-                "CREATE SCHEMA public;");
+    public void clearDb(DataSource dataSource) throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP SCHEMA public CASCADE;" +
+                    "CREATE SCHEMA public;");
+        }
     }
 
     public String user() {

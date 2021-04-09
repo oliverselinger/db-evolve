@@ -18,7 +18,6 @@ public class DbExtension implements BeforeAllCallback, AfterEachCallback, AfterA
     private final static DatabaseTestConfig databaseTestConfig = findDatabaseConfig();
 
     private HikariDataSource dataSource;
-    private QueryRunner queryRunner;
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws SQLException {
@@ -30,20 +29,15 @@ public class DbExtension implements BeforeAllCallback, AfterEachCallback, AfterA
         config.setMaximumPoolSize(databaseTestConfig.maxPoolSize());
 
         dataSource = new HikariDataSource(config);
-        queryRunner = new QueryRunner(dataSource);
     }
 
     @Override
     public void afterEach(ExtensionContext extensionContext) throws SQLException {
-        databaseTestConfig.clearDb(queryRunner);
+        databaseTestConfig.clearDb(dataSource);
     }
 
     public DataSource dataSource() {
         return dataSource;
-    }
-
-    public QueryRunner queryRunner() {
-        return queryRunner;
     }
 
     @Override

@@ -9,18 +9,18 @@ Database schema evolution with plain SQL.
 
 ## Features
 
-* **Persistence** requires two database tables.
-* **Reliable** execution. Guarantees each script is applied exactly once.
-* **Multi-node compatible**. Coordination between nodes with locking.
-* **Lightweight**. Very small code base.
-* **No dependencies**.
-* **No reflection**.
+* **Lightweight** Single class, just 2 tables for persistence.
+* **Fail fast** Failed migration prevents app from starting.
+* **Multi-node compatible** Coordination between nodes with locking.
+* **Checksum** validation. Prevents from accidental changes.
+* **No dependencies**
+* **No reflection**
 
 DbEvolve updates a database from one version to a next using migrations. A migrations is written in SQL with database-specific syntax. Those script files must be made available inside a directory called `sql` in classpath.
 
-Migrations are versioned by providing a unique name by you and a calculated hash of the content behind the scenes. That allows that each script is applied exactly once. 
+Migrations are versioned by providing a version number and a unique description, plus a calculated checksum behind the scenes. The version number is used to apply migrations in order. The checksum validation detects accidental changes of already applied migrations.
 
-All statements of a script file run within a single database transaction.
+All statements of a script file run within a single database transaction. Successful migration executions are recorded in db. This makes sure migration scripts run only once.
 
 Inspired by [Dbolve](https://github.com/cinemast/dbolve) and [Flyway](https://flywaydb.org)
 
@@ -49,9 +49,7 @@ and the Jitpack repository
 
 `V<Version>__<Description>.sql`
 
-`<Version>` must be an integer literal. This number is used to determine the order of execution (sorted numerically not lexicographically). 
-
-Inside the file between each statement there must be at least one empty line. Empty lines are used to delimit the sql statements.
+`<Version>` must be an integer literal. This number is used to determine the order of execution. Files are sorted numerically, not lexicographically.
 
 3. Instantiate `DbEvolve`, which can then be used to start the migration of your database.
 
@@ -60,37 +58,21 @@ DbEvolve dbEvolve = new DbEvolve(dataSource);
 dbEvolve.migrate();
 ```
 
-On instantiation of DbEvolve the two tables `DB_EVOLVE` and `DB_EVOLVE_LOCK` for state control are created. If they already exist, creation is simply skipped.  
+On instantiation of DbEvolve, the two tables `DB_EVOLVE` and `DB_EVOLVE_LOCK` are created for state control. If they already exist, creation is simply skipped.  
 
 ## Scripts
 
-The migration scripts can be written in SQL with database-specific syntax. As default, statements are delimited by `;` at the end of the line. New lines and single line comments are ignored.
-
-For statements where the end is not indicated by a semicolon, e.g. PL-SQL scripts, the end delimiter can be overridden by a specific single line comment to use an empty new line as end indicator. For example:
-
-```
-INSERT INTO TEST VALUES (1);
-
--- ###_NEW_LINE_END_DELIMITER_ON_###
-BEGIN
-dbms_output.put_line (‘Hello World..');
-END;
-/
-
-INSERT INTO TEST VALUES (2);
-```
-
-This would result in the execution of 3 statements. First an insert, second the PL-SQL script and third again an insert.
+The migration scripts can be written in SQL with database-specific syntax. As default, statements are delimited by `;` at the end of the line. Blank lines and single line comments are ignored.
 
 ## FAQ
 
 #### Sql comments
 
-Single line comments indicated with `--` are supported. Multi-line comments not!
+Single line comments indicated with `--` are simply skipped. There is no special handling for multi-line comments.
 
 #### Can I change the content of an already applied migration script?
 
-No! A content change also changes the hash value, and you will receive an exception. However, instead create a new script.
+No! A content change also changes the checksum, and you will receive an exception. However, instead create a new script.
 
 #### Is it running in production?
 
@@ -102,4 +84,8 @@ Requires Java 11+.
 
 #### What databases are supported?
 
-It is tested with Postgres, MySql and H2.
+It is tested with Oracle, Postgres, MySql and H2.
+
+#### Are statements with other end delimiter than `;` supported, like PL/SQL?
+
+No. Currently statements are delimited by `;` only.

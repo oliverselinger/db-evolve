@@ -1,10 +1,11 @@
 package os.db.evolve;
 
+import javax.sql.DataSource;
 import java.sql.SQLException;
 
 interface DatabaseTestConfig {
 
-    void clearDb(QueryRunner queryRunner) throws SQLException;
+    void clearDb(DataSource dataSource) throws SQLException;
 
     String user();
 

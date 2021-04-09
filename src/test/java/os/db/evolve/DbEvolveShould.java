@@ -6,7 +6,12 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import javax.sql.DataSource;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -27,15 +32,10 @@ public class DbEvolveShould {
     static final DbExtension DB_EXTENSION = new DbExtension();
 
     DataSource dataSource;
-    QueryRunner queryRunner;
-    SqlScriptRepository sqlScriptRepository;
-    Logger logger = new Logger() {};
 
     @BeforeEach
     void init() {
         dataSource = DB_EXTENSION.dataSource();
-        queryRunner = new QueryRunner(dataSource);
-        sqlScriptRepository = new SqlScriptRepository(queryRunner, logger);
     }
 
     @Test
@@ -65,72 +65,75 @@ public class DbEvolveShould {
     @Test
     void throw_an_exception_if_directory_is_not_found_on_classpath() {
         DbEvolve dbEvolve = new DbEvolve(dataSource, "not_existing", null);
-        assertThrows(MigrationException.class, dbEvolve::migrate);
+        assertThrows(DbEvolve.MigrationException.class, dbEvolve::migrate);
     }
 
     @Test
     void throw_an_exception_if_file_name_does_not_meet_pattern() {
         DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_wrong_file_name_pattern", null);
-        assertThrows(MigrationException.class, dbEvolve::migrate);
+        assertThrows(DbEvolve.MigrationException.class, dbEvolve::migrate);
     }
 
     @Test
-    void create_and_alter_tables() throws SQLException {
+    void create_and_alter_tables() throws Exception {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
         dbEvolve.migrate();
 
-        List<SqlScript> scripts = sqlScriptRepository.findAll();
+        List<SqlScript> scripts = selectAll();
         assertEquals(2, scripts.size());
 
         SqlScript sqlScript1 = scripts.get(0);
-        assertEquals("V1__create_tables.sql", sqlScript1.getName());
-        assertEquals("2b19e853bf20b0fc16a34c0adbfa9341e39494dee0128a26ce7b640df555fa03", sqlScript1.getHash());
-        assertNotNull(sqlScript1.getTimestamp());
+        assertEquals("V1__create_tables.sql", sqlScript1.name);
+        assertEquals("2b19e853bf20b0fc16a34c0adbfa9341e39494dee0128a26ce7b640df555fa03", sqlScript1.hash);
+        assertNotNull(sqlScript1.timestamp);
 
         SqlScript sqlScript2 = scripts.get(1);
-        assertEquals("V2__alter_tables.sql", sqlScript2.getName());
-        assertEquals("a677106b5ac1ba1aa0724147dd8a392cae90500a1f3af032e0fd6268ca9a7b96", sqlScript2.getHash());
-        assertNotNull(sqlScript2.getTimestamp());
+        assertEquals("V2__alter_tables.sql", sqlScript2.name);
+        assertEquals("a677106b5ac1ba1aa0724147dd8a392cae90500a1f3af032e0fd6268ca9a7b96", sqlScript2.hash);
+        assertNotNull(sqlScript2.timestamp);
 
-        assertDoesNotThrow(() -> queryRunner.execute("INSERT INTO TEST1 VALUES (1, 'ABC')"));
-        assertDoesNotThrow(() -> queryRunner.execute("INSERT INTO TEST2 VALUES (2, 'CBA')"));
+        assertDoesNotThrow(() -> execute("INSERT INTO TEST1 VALUES (1, 'ABC')"));
+        assertDoesNotThrow(() -> execute("INSERT INTO TEST2 VALUES (2, 'CBA')"));
     }
 
     @Test
-    void not_rerun_already_executed_scripts() throws SQLException {
+    void not_rerun_already_executed_scripts() throws Exception {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
         dbEvolve.migrate();
 
         assertDoesNotThrow(dbEvolve::migrate);
 
-        List<SqlScript> scripts = sqlScriptRepository.findAll();
+        List<SqlScript> scripts = selectAll();
         assertEquals(2, scripts.size());
     }
 
     @Test
-    void throw_an_exception_if_a_migrated_script_has_changed() throws SQLException {
+    void throw_an_exception_if_a_migrated_script_has_changed() throws Exception {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
         dbEvolve.migrate();
 
-        assertThrows(MigrationException.class, () -> new DbEvolve(dataSource, "sql_changed_file_content", null).migrate());
+        assertThrows(DbEvolve.MigrationException.class, () -> new DbEvolve(dataSource, "sql_changed_file_content", null).migrate());
 
-        List<SqlScript> scripts = sqlScriptRepository.findAll();
+        List<SqlScript> scripts = selectAll();
         assertEquals(2, scripts.size());
     }
 
     @Test
-    void not_start_the_migration_if_db_is_locked() throws SQLException {
+    void not_start_the_migration_if_db_is_locked() throws Exception {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
 
-        LockRepository lockRepository = new LockRepository(queryRunner, logger);
-        boolean locked = lockRepository.lock();
-        assertTrue(locked);
+        try (Connection connection = dataSource.getConnection()) {
+            boolean locked = dbEvolve.lock(connection);
+            assertTrue(locked);
+        }
 
         boolean migrated = dbEvolve.migrate();
         assertFalse(migrated);
 
-        boolean unlocked = lockRepository.unlock();
-        assertTrue(unlocked);
+        try (Connection connection = dataSource.getConnection()) {
+            boolean unlocked = dbEvolve.unlock(connection);
+            assertTrue(unlocked);
+        }
 
         migrated = dbEvolve.migrate();
         assertTrue(migrated);
@@ -139,7 +142,39 @@ public class DbEvolveShould {
     @Test
     void throw_an_exception_if_sql_stmt_is_invalid() {
         DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_invalid_stmt", null);
-        MigrationException migrationException = assertThrows(MigrationException.class, dbEvolve::migrate);
+        DbEvolve.MigrationException migrationException = assertThrows(DbEvolve.MigrationException.class, dbEvolve::migrate);
         assertEquals(migrationException.getMessage(), "V1__create_tables.sql - Invalid sql statement found at line 9");
+    }
+
+    private int execute(String sqlStatement) throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            return statement.executeUpdate(sqlStatement);
+        }
+    }
+
+    private List<SqlScript> selectAll() throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+             Statement ps = connection.createStatement()) {
+            ResultSet rs = ps.executeQuery("SELECT * FROM DB_EVOLVE ORDER BY TIMESTAMP");
+
+            List<SqlScript> result = new ArrayList<>();
+            while (rs.next()) {
+                result.add(new SqlScript(rs.getString("NAME"), rs.getString("HASH"), rs.getTimestamp("TIMESTAMP").toLocalDateTime()));
+            }
+            return result;
+        }
+    }
+
+    private static class SqlScript {
+        private final String name;
+        private final String hash;
+        private final LocalDateTime timestamp;
+
+        public SqlScript(String name, String hash, LocalDateTime timestamp) {
+            this.name = name;
+            this.hash = hash;
+            this.timestamp = timestamp;
+        }
     }
 }

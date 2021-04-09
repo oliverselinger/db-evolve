@@ -1,11 +1,17 @@
 package os.db.evolve;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 class H2DatabaseTestConfig implements DatabaseTestConfig {
 
-    public void clearDb(QueryRunner queryRunner) throws SQLException {
-        queryRunner.execute("DROP ALL OBJECTS");
+    public void clearDb(DataSource dataSource) throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP ALL OBJECTS");
+        }
     }
 
     public String user() {

@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -14,12 +15,18 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -32,146 +39,179 @@ public class DbEvolve {
 
     private final DataSource dataSource;
     private final String classpathDirectory;
-    private final QueryRunner queryRunner;
-    private final LockRepository lockRepository;
-    private final SqlScriptRepository sqlScriptRepository;
+    private final boolean insideJar;
     private final MessageDigest digest;
     private final Logger logger;
 
     public DbEvolve(DataSource dataSource) {
-        this(dataSource, DEFAULT_CLASSPATH_DIRECTORY, null);
+        this(dataSource, DEFAULT_CLASSPATH_DIRECTORY, Logger.NO_OP);
     }
 
     public DbEvolve(DataSource dataSource, String classpathDirectory, Logger logger) {
-        if (logger == null) {
-            logger = new Logger() {};
-        }
-        this.logger = logger;
+        this.logger = logger != null ? logger : Logger.NO_OP;
         this.dataSource = dataSource;
         this.classpathDirectory = classpathDirectory;
-        this.queryRunner = new QueryRunner(dataSource);
-        this.lockRepository = new LockRepository(queryRunner, this.logger);
-        this.sqlScriptRepository = new SqlScriptRepository(queryRunner, this.logger);
+        this.insideJar = Objects.equals("jar", getClass().getResource("").getProtocol());
         try {
             this.digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
-            throw new MigrationException(e);
+            throw new MigrationException("Unable to MessageDigest.getInstance of SHA-256", e);
         }
 
         createTablesIfNotExist();
     }
 
-    public boolean migrate() {
-        try (DbLock dbLock = new DbLock(lockRepository)) {
+    public boolean migrate() throws IOException, URISyntaxException, SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(true);
 
-            boolean lock = dbLock.lock();
-            if (!lock) {
+            if (!lock(connection)) {
                 logger.log(Logger.Level.INFO, "Db-Evolve skipping migration due to locked database.");
                 return false;
             }
 
-            List<Path> sqlFiles = findAllSqlFiles();
-            List<SqlScript> sqlScripts = sqlScriptRepository.findAll();
+            FileSystem fileSystem = null;
 
-            for (Path sqlFile : sqlFiles) {
+            try {
+                fileSystem = getFileSystem();
+                List<Path> sqlFiles = walkSqlDirectory(sqlPath(fileSystem));
 
-                byte[] content = Files.readAllBytes(sqlFile);
-                String currentHash = hash(content);
+                Map<String, String> sqlScriptsByName = selectAllFromDb(connection);
 
-                Optional<SqlScript> sqlScript = sqlScripts.stream()
-                        .filter(script -> script.getName().equals(sqlFile.getFileName().toString()))
-                        .findFirst();
+                for (Path sqlFile : sqlFiles) {
+                    byte[] content = Files.readAllBytes(sqlFile);
+                    String hash = hash(content);
 
-                if (sqlScript.isPresent()) {
-                    validateFingerprint(sqlScript.get(), currentHash);
-                    continue;
+                    String fileName = sqlFile.getFileName().toString();
+                    String knownHash = sqlScriptsByName.get(fileName);
+
+                    if (knownHash != null) {
+                        if (!hash.equals(knownHash)) {
+                            throw new MigrationException(String.format("Content of %s has changed", fileName));
+                        }
+                        continue;
+                    }
+
+                    migrateSqlFile(connection, fileName, hash, content);
                 }
+            } finally {
+                unlock(connection);
 
-                migrateSqlFile(new SqlScript(sqlFile.getFileName().toString(), currentHash, LocalDateTime.now()), content);
+                if (insideJar && fileSystem != null) {
+                    fileSystem.close();
+                }
             }
-        } catch (MigrationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new MigrationException(e);
         }
 
         return true;
     }
 
     private void createTablesIfNotExist() {
-        sqlScriptRepository.createTable();
-        lockRepository.createTable();
+        try (Connection connection = dataSource.getConnection()) {
+            execute(connection, "CREATE TABLE DB_EVOLVE (name VARCHAR(255) NOT NULL, hash VARCHAR(64) NOT NULL, timestamp TIMESTAMP, PRIMARY KEY (name))");
+            execute(connection, "CREATE TABLE DB_EVOLVE_LOCK (DB_LOCK INTEGER, TIMESTAMP TIMESTAMP, PRIMARY KEY (DB_LOCK))");
+            execute(connection, "INSERT INTO DB_EVOLVE_LOCK (DB_LOCK) VALUES (0)");
+        } catch (SQLException throwables) {
+            // ignore => assumption table already exist. If not migration will fail anyway.
+            logger.log(Logger.Level.DEBUG, throwables.getMessage());
+        }
     }
 
-    private List<Path> findAllSqlFiles() throws URISyntaxException, IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
+    boolean lock(Connection connection) throws SQLException {
+        int count = executeUpdate(connection, "UPDATE DB_EVOLVE_LOCK SET DB_LOCK = 1, TIMESTAMP = ? WHERE DB_LOCK = 0", Timestamp.valueOf(LocalDateTime.now()));
+        return count == 1;
+    }
 
-        var uri = classLoader.getResource(classpathDirectory).toURI();
-        if (uri == null) {
+    boolean unlock(Connection connection) throws SQLException {
+        int count = executeUpdate(connection, "UPDATE DB_EVOLVE_LOCK SET DB_LOCK = 0 WHERE DB_LOCK = 1");
+        return count == 1;
+    }
+
+    private void migrateSqlFile(Connection connection, String fileName, String hash, byte[] content) throws IOException, SQLException {
+        connection.setAutoCommit(false);
+
+        try (ByteArrayInputStream contentAsStream = new ByteArrayInputStream(content);
+             InputStreamReader inReader = new InputStreamReader(contentAsStream);
+             BufferedReader reader = new BufferedReader(inReader)) {
+
+            parseAndExecuteStatements(connection, fileName, reader);
+
+            executeUpdate(connection, "INSERT INTO DB_EVOLVE (NAME, HASH, TIMESTAMP) VALUES (?, ?, ?)", fileName, hash, Timestamp.valueOf(LocalDateTime.now()));
+        } catch (java.lang.Exception ex) {
+            connection.rollback();
+            connection.setAutoCommit(true);
+            throw ex;
+        }
+        connection.commit();
+        connection.setAutoCommit(true);
+    }
+
+    private void parseAndExecuteStatements(Connection connection, String fileName, BufferedReader reader) throws IOException {
+        int lineNumber = 0;
+        String line;
+        StringBuilder statement = new StringBuilder();
+        int statementStartLineNumber = -1;
+
+        try {
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+
+                if (line.startsWith("--") || line.isBlank()) { // skip single line comments and blank lines
+                    continue;
+                }
+
+                if (statementStartLineNumber == -1) {
+                    statementStartLineNumber = lineNumber;
+                }
+
+                statement.append(line).append("\n");
+
+                if (line.endsWith(";")) {
+                    int length = statement.length();
+                    statement.replace(length - 2, length, ""); // remove ';'
+                    executeMigration(connection, fileName, statement.toString());
+
+                    // reset
+                    statement.setLength(0);
+                    statementStartLineNumber = -1;
+                }
+            }
+        } catch (SQLException e) {
+            throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", fileName, statementStartLineNumber), e);
+        }
+    }
+
+    private void executeMigration(Connection connection, String fileName, String statement) throws SQLException {
+        logger.log(Logger.Level.INFO, String.format("Executing migration %s:\n%s", fileName, statement));
+        execute(connection, statement);
+    }
+
+    private FileSystem getFileSystem() throws URISyntaxException, IOException {
+        if (this.insideJar) {
+            return FileSystems.newFileSystem(this.getClass().getResource("").toURI(), Collections.emptyMap());
+        }
+        return FileSystems.getDefault(); // inside ide
+    }
+
+    private Path sqlPath(FileSystem fileSystem) throws URISyntaxException {
+        ClassLoader classLoader = getClass().getClassLoader();
+        URL resource = classLoader.getResource(classpathDirectory);
+        if (resource == null) {
             throw new MigrationException(String.format("No migrations found. Directory %s is not on classpath.", classpathDirectory));
         }
 
-        Path path;
-        //Check if we are in a jar file
-        if (uri.getScheme().equals("jar")) {
-            FileSystem fileSystem = FileSystems.newFileSystem(uri, Collections.emptyMap());
-            path = fileSystem.getPath(classpathDirectory);
-        } else {
-            path = Paths.get(uri);
+        if (insideJar) {
+            return fileSystem.getPath(classpathDirectory);
         }
 
+        return Paths.get(resource.toURI());
+    }
+
+    private List<Path> walkSqlDirectory(Path path) throws IOException {
         return Files.walk(path)
                 .filter(Files::isRegularFile)
                 .sorted(VERSION_COMPARATOR)
                 .collect(Collectors.toList());
-    }
-
-    private void validateFingerprint(SqlScript sqlScript, String currentHash) {
-        // validate fingerprint
-        if (!currentHash.equals(sqlScript.getHash())) {
-            throw new MigrationException(String.format("Content of %s has changed", sqlScript.getName()));
-        }
-    }
-
-    private void migrateSqlFile(SqlScript toMigrate, byte[] content) throws IOException, SQLException {
-
-        try (Connection connection = dataSource.getConnection();
-             Transaction transaction = new Transaction(connection);
-             ByteArrayInputStream contentAsStream = new ByteArrayInputStream(content);
-             InputStreamReader inReader = new InputStreamReader(contentAsStream);
-             BufferedReader reader = new BufferedReader(inReader)) {
-
-            parseAndExecuteStatements(toMigrate, connection, reader);
-
-            sqlScriptRepository.save(connection, toMigrate);
-
-            transaction.commit();
-        }
-    }
-
-    private void parseAndExecuteStatements(SqlScript toMigrate, Connection connection, BufferedReader reader) throws IOException {
-        StatementParser parser = new StatementParser();
-
-        int lineNumber = 0;
-        while (true) {
-            String line = reader.readLine();
-            lineNumber++;
-
-            parser.accept(line, lineNumber);
-            if (parser.isComplete()) {
-                try {
-                    logger.log(Logger.Level.INFO, String.format("Executing migration %s: %s", toMigrate.getName(), parser.getStatement().replace("\n", "").replace("\r", "")));
-                    queryRunner.execute(connection, parser.getStatement());
-                } catch (SQLException e) {
-                    throw new MigrationException(String.format("%s - Invalid sql statement found at line %d", toMigrate.getName(), parser.getStartLineNumber()), e);
-                }
-                parser.reset();
-            }
-
-            if (line == null) {
-                break;
-            }
-        }
     }
 
     private static int extractVersionFromFileName(Path path) {
@@ -182,6 +222,18 @@ public class DbEvolve {
         return Integer.parseInt(matcher.group(1));
     }
 
+    Map<String, String> selectAllFromDb(Connection connection) throws SQLException {
+        try (Statement ps = connection.createStatement()) {
+            ResultSet rs = ps.executeQuery("SELECT * FROM DB_EVOLVE ORDER BY TIMESTAMP");
+
+            Map<String, String> result = new HashMap<>();
+            while (rs.next()) {
+                result.put(rs.getString("NAME"), rs.getString("HASH"));
+            }
+            return result;
+        }
+    }
+
     private String hash(byte[] fileContent) {
         byte[] encodedhash = digest.digest(fileContent);
         return bytesToHex(encodedhash);
@@ -189,8 +241,8 @@ public class DbEvolve {
 
     private String bytesToHex(byte[] hash) {
         StringBuilder hexString = new StringBuilder(2 * hash.length);
-        for (int i = 0; i < hash.length; i++) {
-            String hex = Integer.toHexString(0xff & hash[i]);
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
             if (hex.length() == 1) {
                 hexString.append('0');
             }
@@ -198,5 +250,47 @@ public class DbEvolve {
         }
         return hexString.toString();
     }
+
+    void execute(Connection connection, String sqlStatement) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sqlStatement);
+        }
+    }
+
+    int executeUpdate(Connection connection, String sql, Object... params) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            int cnt = 0;
+            for (Object param : params) {
+                ps.setObject(++cnt, param);
+            }
+            return ps.executeUpdate();
+        }
+    }
+
+    public interface Logger {
+
+        Logger NO_OP = new Logger() {
+        };
+
+        default void log(Level level, String message) {
+            System.out.println("DbEvolve: " + message);
+        }
+
+        enum Level {
+            DEBUG, INFO
+        }
+    }
+
+    public static class MigrationException extends RuntimeException {
+
+        public MigrationException(String message) {
+            super(message);
+        }
+
+        public MigrationException(String message, Exception e) {
+            super(message, e);
+        }
+    }
 }
+
 

@@ -16,7 +16,7 @@ Database schema evolution with plain SQL.
 * **No dependencies**.
 * **No reflection**.
 
-DbEvolve updates a database from one version to a next using migrations. A migrations is written in SQL with database-specific syntax. Those script files must be made available inside a directory called `sql` in classpath.
+DbEvolve updates a database from one version to a next using migrations. A migration is written in SQL with database-specific syntax. Those script files must be made available inside a directory called `sql` in classpath.
 
 Migrations are versioned by providing a version number and a unique description, plus a calculated checksum behind the scenes. The version number is used to apply migrations in order. The checksum validation detects accidental changes of already applied migrations.
 

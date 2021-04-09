@@ -9,12 +9,12 @@ Database schema evolution with plain SQL.
 
 ## Features
 
-* **Lightweight** Single class, just 2 tables for persistence.
-* **Fail fast** Failed migration prevents app from starting.
-* **Multi-node compatible** Coordination between nodes with locking.
+* **Lightweight**. Single class, just 2 tables for persistence.
+* **Fail fast**. Failed migration prevents app from starting.
+* **Multi-node compatible**. Coordination between nodes with locking.
 * **Checksum** validation. Prevents from accidental changes.
-* **No dependencies**
-* **No reflection**
+* **No dependencies**.
+* **No reflection**.
 
 DbEvolve updates a database from one version to a next using migrations. A migrations is written in SQL with database-specific syntax. Those script files must be made available inside a directory called `sql` in classpath.
 

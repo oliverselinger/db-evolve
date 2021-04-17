@@ -64,6 +64,20 @@ On instantiation of DbEvolve, the two tables `DB_EVOLVE` and `DB_EVOLVE_LOCK` ar
 
 The migration scripts can be written in SQL with database-specific syntax. As default, statements are delimited by `;` at the end of the line. Blank lines and single line comments are ignored.
 
+You can override the default delimiter to parse functions, like PL/SQL, as a whole. For that, just put the keyword `DELIMITER <your_delimiter>` in a line before the function starts. Then at the of the function put `<your_delimiter>` in a new line.
+
+```sql
+DELIMITER ##
+CREATE FUNCTION public.my_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    ... statements ending with ;
+END
+$$;
+##
+```
+
 ## FAQ
 
 #### Sql comments

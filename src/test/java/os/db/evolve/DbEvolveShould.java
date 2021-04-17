@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import javax.sql.DataSource;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -144,6 +147,27 @@ public class DbEvolveShould {
         DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_invalid_stmt", null);
         DbEvolve.MigrationException migrationException = assertThrows(DbEvolve.MigrationException.class, dbEvolve::migrate);
         assertEquals(migrationException.getMessage(), "V1__create_tables.sql - Invalid sql statement found at line 9");
+    }
+
+    @Test
+    void parse_statement_with_custom_delimiter() throws IOException {
+        DbEvolve dbEvolve = new DbEvolve(dataSource);
+
+        String postgresFunction = "" +
+                "CREATE FUNCTION public.message_content_vector_update() RETURNS trigger\n" +
+                "    LANGUAGE plpgsql\n" +
+                "    AS $$\n" +
+                "BEGIN\n" +
+                "    NEW.content_vector = to_tsvector('pg_catalog.english', COALESCE(NEW.content, '') || ' ' || COALESCE(NEW.subject, '') || ' ' || COALESCE(NEW.sender_id, '') || ' ' ||\n" +
+                "                                                           COALESCE(NEW.recipients_semicolon_separated, ''));\n" +
+                "    RETURN NEW;\n" +
+                "END\n" +
+                "$$;\n" +
+                "##";
+
+        String functionWithCustomDelimiter = "DELIMITER ##\n" + postgresFunction + "##\n";
+
+        dbEvolve.parseAndExecuteStatements("file.sql", new BufferedReader(new StringReader(functionWithCustomDelimiter)), stmt -> assertEquals(postgresFunction, stmt));
     }
 
     private int execute(String sqlStatement) throws SQLException {

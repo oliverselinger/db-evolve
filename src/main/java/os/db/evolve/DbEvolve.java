@@ -134,7 +134,7 @@ public class DbEvolve {
              InputStreamReader inReader = new InputStreamReader(contentAsStream);
              BufferedReader reader = new BufferedReader(inReader)) {
 
-            parseAndExecuteStatements(connection, fileName, reader);
+            parseAndExecuteStatements(fileName, reader, stmt -> executeMigration(connection, fileName, stmt));
 
             executeUpdate(connection, "INSERT INTO DB_EVOLVE (NAME, HASH, TIMESTAMP) VALUES (?, ?, ?)", fileName, hash, Timestamp.valueOf(LocalDateTime.now()));
         } catch (java.lang.Exception ex) {
@@ -146,11 +146,12 @@ public class DbEvolve {
         connection.setAutoCommit(true);
     }
 
-    private void parseAndExecuteStatements(Connection connection, String fileName, BufferedReader reader) throws IOException {
+    void parseAndExecuteStatements(String fileName, BufferedReader reader, StatementExecutor statementExecutor) throws IOException {
         int lineNumber = 0;
         String line;
         StringBuilder statement = new StringBuilder();
         int statementStartLineNumber = -1;
+        String delimiter = ";";
 
         try {
             while ((line = reader.readLine()) != null) {
@@ -160,20 +161,26 @@ public class DbEvolve {
                     continue;
                 }
 
+                if (line.startsWith("DELIMITER ")) {
+                    delimiter = line.substring(10);
+                    continue;
+                }
+
                 if (statementStartLineNumber == -1) {
                     statementStartLineNumber = lineNumber;
                 }
 
                 statement.append(line).append("\n");
 
-                if (line.endsWith(";")) {
+                if (line.endsWith(delimiter)) {
                     int length = statement.length();
-                    statement.replace(length - 2, length, ""); // remove ';'
-                    executeMigration(connection, fileName, statement.toString());
+                    statement.replace(length - delimiter.length()-1, length, ""); // remove delimiter
+                    statementExecutor.execute(statement.toString());
 
                     // reset
                     statement.setLength(0);
                     statementStartLineNumber = -1;
+                    delimiter = ";";
                 }
             }
         } catch (SQLException e) {
@@ -291,6 +298,8 @@ public class DbEvolve {
             super(message, e);
         }
     }
+
+    public interface StatementExecutor {
+        void execute(String statement) throws SQLException;
+    }
 }
-
-

@@ -99,7 +99,3 @@ Requires Java 11+.
 #### What databases are supported?
 
 It is tested with Oracle, Postgres, MySql and H2.
-
-#### Are statements with other end delimiter than `;` supported, like PL/SQL?
-
-No. Currently statements are delimited by `;` only.

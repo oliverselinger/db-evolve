@@ -36,11 +36,19 @@ public class DbEvolve {
     static final String DEFAULT_CLASSPATH_DIRECTORY = "sql";
     static final Pattern FILE_VERSION_PATTERN = Pattern.compile("V(\\d+)__.*");
     static final Comparator<Path> VERSION_COMPARATOR = Comparator.comparingInt(DbEvolve::extractVersionFromFileName);
+    private static final MessageDigest digest;
+
+    static {
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new MigrationException("Unable to MessageDigest.getInstance of SHA-256", e);
+        }
+    }
 
     private final DataSource dataSource;
     private final String classpathDirectory;
     private final boolean insideJar;
-    private final MessageDigest digest;
     private final Logger logger;
 
     public DbEvolve(DataSource dataSource) {
@@ -52,11 +60,6 @@ public class DbEvolve {
         this.dataSource = dataSource;
         this.classpathDirectory = classpathDirectory;
         this.insideJar = Objects.equals("jar", getClass().getResource("").getProtocol());
-        try {
-            this.digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new MigrationException("Unable to MessageDigest.getInstance of SHA-256", e);
-        }
 
         createTablesIfNotExist();
     }
@@ -104,6 +107,11 @@ public class DbEvolve {
         }
 
         return true;
+    }
+
+    public static String hash(Path sqlFile) throws IOException {
+        byte[] content = Files.readAllBytes(sqlFile);
+        return hash(content);
     }
 
     private void createTablesIfNotExist() {
@@ -241,12 +249,12 @@ public class DbEvolve {
         }
     }
 
-    private String hash(byte[] fileContent) {
+    private static String hash(byte[] fileContent) {
         byte[] encodedhash = digest.digest(fileContent);
         return bytesToHex(encodedhash);
     }
 
-    private String bytesToHex(byte[] hash) {
+    private static String bytesToHex(byte[] hash) {
         StringBuilder hexString = new StringBuilder(2 * hash.length);
         for (byte b : hash) {
             String hex = Integer.toHexString(0xff & b);

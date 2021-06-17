@@ -170,6 +170,12 @@ public class DbEvolveShould {
         dbEvolve.parseAndExecuteStatements("file.sql", new BufferedReader(new StringReader(functionWithCustomDelimiter)), stmt -> assertEquals(postgresFunction, stmt));
     }
 
+    @Test
+    void create_hash_for_file() throws IOException {
+        String hash = DbEvolve.hash(Path.of("src/test/resources/sql/V1__create_tables.sql"));
+        assertEquals("2b19e853bf20b0fc16a34c0adbfa9341e39494dee0128a26ce7b640df555fa03", hash);
+    }
+
     private int execute(String sqlStatement) throws SQLException {
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {

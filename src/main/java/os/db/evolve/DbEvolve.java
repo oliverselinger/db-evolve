@@ -90,7 +90,7 @@ public class DbEvolve {
 
                     if (knownHash != null) {
                         if (!hash.equals(knownHash)) {
-                            throw new MigrationException(String.format("Content of %s has changed", fileName));
+                            throw new MigrationException(String.format("Content of %s has changed. Expected hash %s but was %s", fileName, knownHash, hash));
                         }
                         continue;
                     }

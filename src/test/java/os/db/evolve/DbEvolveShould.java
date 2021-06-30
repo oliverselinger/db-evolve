@@ -115,7 +115,8 @@ public class DbEvolveShould {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
         dbEvolve.migrate();
 
-        assertThrows(DbEvolve.MigrationException.class, () -> new DbEvolve(dataSource, "sql_changed_file_content", null).migrate());
+        DbEvolve.MigrationException exception = assertThrows(DbEvolve.MigrationException.class, () -> new DbEvolve(dataSource, "sql_changed_file_content", null).migrate());
+        assertEquals("Content of V2__alter_tables.sql has changed. Expected hash a677106b5ac1ba1aa0724147dd8a392cae90500a1f3af032e0fd6268ca9a7b96 but was f41274c6b68fa4bd38b1dca865a0cc0da59c277f1b104a8f32ff2cf374516f6d", exception.getMessage());
 
         List<SqlScript> scripts = selectAll();
         assertEquals(2, scripts.size());

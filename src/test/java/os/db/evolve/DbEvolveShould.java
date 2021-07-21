@@ -3,6 +3,7 @@ package os.db.evolve;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 
 import javax.sql.DataSource;
 import java.io.BufferedReader;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -104,7 +106,7 @@ public class DbEvolveShould {
         DbEvolve dbEvolve = new DbEvolve(dataSource);
         dbEvolve.migrate();
 
-        assertDoesNotThrow(dbEvolve::migrate);
+        assertDoesNotThrow((ThrowingSupplier<Boolean>) dbEvolve::migrate);
 
         List<SqlScript> scripts = selectAll();
         assertEquals(2, scripts.size());
@@ -175,6 +177,22 @@ public class DbEvolveShould {
     void create_hash_for_file() throws IOException {
         String hash = DbEvolve.hash(Path.of("src/test/resources/sql/V1__create_tables.sql"));
         assertEquals("2b19e853bf20b0fc16a34c0adbfa9341e39494dee0128a26ce7b640df555fa03", hash);
+    }
+
+    @Test
+    void replace_placeholders_with_values() {
+        DbEvolve dbEvolve = new DbEvolve(dataSource);
+        String statement = dbEvolve.replacePlaceholder("CREATE TABLE TEST ( \n CREATED_AT ${datetime} \n, \n MODIFIED_AT ${datetime} \n)", Map.of("datetime", "TIMESTAMP"));
+        assertEquals("CREATE TABLE TEST ( \n CREATED_AT TIMESTAMP \n, \n MODIFIED_AT TIMESTAMP \n)", statement);
+    }
+
+    @Test
+    void replace_placeholders_and_create_and_alter_tables() throws Exception {
+        DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_with_placeholders", null);
+        dbEvolve.migrate(Map.of("datetime", "TIMESTAMP", "chartype", "VARCHAR(255)"));
+
+        assertDoesNotThrow(() -> execute("INSERT INTO TEST1 (ID, NAME, CREATED_DATE, MODIFIED_DATE) VALUES (1, 'ABC', CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"));
+        assertDoesNotThrow(() -> execute("INSERT INTO TEST2 (ID, NAME, CREATED_DATE, MODIFIED_DATE) VALUES (2, 'CBA', CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"));
     }
 
     private int execute(String sqlStatement) throws SQLException {

@@ -1,0 +1,5 @@
+ALTER TABLE TEST1
+ADD NAME ${chartype};
+
+ALTER TABLE TEST2
+ADD NAME ${chartype};

@@ -20,6 +20,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class DbEvolve {
     static final String DEFAULT_CLASSPATH_DIRECTORY = "sql";
     static final Pattern FILE_VERSION_PATTERN = Pattern.compile("V(\\d+)__.*");
     static final Comparator<String> VERSION_COMPARATOR = Comparator.comparingInt(DbEvolve::extractVersionFromFileName);
+    static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([A-Za-z0-9-\\_]+)\\}");
     private static final MessageDigest digest;
 
     static {
@@ -42,7 +44,6 @@ public class DbEvolve {
             throw new MigrationException("Unable to MessageDigest.getInstance of SHA-256", e);
         }
     }
-
     private final DataSource dataSource;
     private final String classpathDirectory;
     private final Logger logger;
@@ -60,6 +61,10 @@ public class DbEvolve {
     }
 
     public boolean migrate() throws IOException, URISyntaxException, SQLException {
+        return migrate(Collections.emptyMap());
+    }
+
+    public boolean migrate(Map<String, String> placeholderValues) throws IOException, URISyntaxException, SQLException {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(true);
 
@@ -70,7 +75,6 @@ public class DbEvolve {
 
             try {
                 SortedSet<String> filenames = readFilenamesFromClasspath(classpathDirectory);
-
                 Map<String, String> sqlScriptsByName = selectAllFromDb(connection);
 
                 for (String filename : filenames) {
@@ -88,7 +92,7 @@ public class DbEvolve {
                         continue;
                     }
 
-                    migrateSqlFile(connection, fileName, hash, content);
+                    migrateSqlFile(connection, fileName, hash, content, placeholderValues);
                 }
             } finally {
                 unlock(connection);
@@ -124,14 +128,14 @@ public class DbEvolve {
         return count == 1;
     }
 
-    private void migrateSqlFile(Connection connection, String fileName, String hash, byte[] content) throws IOException, SQLException {
+    private void migrateSqlFile(Connection connection, String fileName, String hash, byte[] content, Map<String, String> placeholderValues) throws IOException, SQLException {
         connection.setAutoCommit(false);
 
         try (ByteArrayInputStream contentAsStream = new ByteArrayInputStream(content);
              InputStreamReader inReader = new InputStreamReader(contentAsStream);
              BufferedReader reader = new BufferedReader(inReader)) {
 
-            parseAndExecuteStatements(fileName, reader, stmt -> executeMigration(connection, fileName, stmt));
+            parseAndExecuteStatements(fileName, reader, stmt -> executeMigration(connection, fileName, stmt, placeholderValues));
 
             executeUpdate(connection, "INSERT INTO DB_EVOLVE (NAME, HASH, TIMESTAMP) VALUES (?, ?, ?)", fileName, hash, Timestamp.valueOf(LocalDateTime.now()));
         } catch (java.lang.Exception ex) {
@@ -185,9 +189,25 @@ public class DbEvolve {
         }
     }
 
-    private void executeMigration(Connection connection, String fileName, String statement) throws SQLException {
+    private void executeMigration(Connection connection, String fileName, String statement, Map<String, String> placeHolderValues) throws SQLException {
+        statement = replacePlaceholder(statement, placeHolderValues);
         logger.log(Logger.Level.INFO, String.format("Executing migration %s:\n%s", fileName, statement));
         execute(connection, statement);
+    }
+
+    String replacePlaceholder(String statement, Map<String, String> placeHolderValues) {
+        StringBuilder builder = new StringBuilder();
+        Matcher matcher = DbEvolve.PLACEHOLDER_PATTERN.matcher(statement);
+        while(matcher.find()){
+            String placeholder = matcher.group(1);
+            String replacement = placeHolderValues.get(placeholder);
+            if (replacement == null) {
+                throw new MigrationException(String.format("Missing value for placeholder '%s'", placeholder));
+            }
+            matcher.appendReplacement(builder, replacement);
+        }
+        matcher.appendTail(builder);
+        return builder.toString();
     }
 
     private SortedSet<String> readFilenamesFromClasspath(String path) throws IOException {

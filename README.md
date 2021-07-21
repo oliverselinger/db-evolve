@@ -78,6 +78,36 @@ $$;
 ##
 ```
 
+### Placeholders
+
+Inside SQL scripts you can specify placeholders which will be replaced by the provided values before execution.
+This is useful in case you want to use same sql scripts for multiple db vendors. E.g. Date/Time types for H2 is TIMESTAMP and for Oracle it is DATE.
+So you could have the following statement:
+
+```sql
+CREATE TABLE PERSON (
+    ID VARCHAR(36) NOT NULL,
+    CREATED_DATE ${datetime},
+    PRIMARY KEY (ID)
+);
+```
+
+When you execute the migration pass a `Map<String, String>` that contains a value for each placeholder:
+
+For H2:
+```sql
+Map<String, String> replacements = new HashMap<>();
+replacements.put("datetime", "TIMESTAMP");
+dbEvolve.migrate(replacements);
+```
+
+For Oracle:
+```sql
+Map<String, String> replacements = new HashMap<>();
+replacements.put("datetime", "DATE");
+dbEvolve.migrate(replacements);
+```
+
 ## FAQ
 
 #### Sql comments

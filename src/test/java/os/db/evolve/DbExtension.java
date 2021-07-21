@@ -40,13 +40,17 @@ public class DbExtension implements BeforeAllCallback, AfterEachCallback, AfterA
         return dataSource;
     }
 
+    public boolean isPostgres() {
+        return "POSTGRES".equals(getTestDBVendor());
+    }
+
     @Override
     public void afterAll(ExtensionContext extensionContext) {
         dataSource.close();
     }
 
     private static DatabaseTestConfig findDatabaseConfig() {
-        String testDB = System.getenv("TEST_DB");
+        String testDB = getTestDBVendor();
 
         if (testDB == null) {
             log.info("Configuring H2 database");
@@ -63,5 +67,10 @@ public class DbExtension implements BeforeAllCallback, AfterEachCallback, AfterA
             default:
                 throw new IllegalArgumentException("Unknown test database");
         }
+    }
+
+    private static String getTestDBVendor() {
+        String testDB = System.getenv("TEST_DB");
+        return testDB;
     }
 }

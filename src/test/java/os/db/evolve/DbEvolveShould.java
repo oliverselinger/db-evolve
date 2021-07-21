@@ -191,8 +191,8 @@ public class DbEvolveShould {
         DbEvolve dbEvolve = new DbEvolve(dataSource, "sql_with_placeholders", null);
         dbEvolve.migrate(Map.of("datetime", "TIMESTAMP", "chartype", "VARCHAR(255)"));
 
-        assertDoesNotThrow(() -> execute("INSERT INTO TEST1 (ID, NAME, CREATED_DATE, MODIFIED_DATE) VALUES (1, 'ABC', CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"));
-        assertDoesNotThrow(() -> execute("INSERT INTO TEST2 (ID, NAME, CREATED_DATE, MODIFIED_DATE) VALUES (2, 'CBA', CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"));
+        assertDoesNotThrow(() -> execute("INSERT INTO TEST1 (ID, NAME, CREATED_DATE, MODIFIED_DATE) VALUES (1, 'ABC', NOW(), NOW())"));
+        assertDoesNotThrow(() -> execute("INSERT INTO TEST2 (ID, NAME, CREATED_DATE, MODIFIED_DATE) VALUES (2, 'CBA', NOW(), NOW())"));
     }
 
     private int execute(String sqlStatement) throws SQLException {

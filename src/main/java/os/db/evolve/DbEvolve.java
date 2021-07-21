@@ -4,11 +4,10 @@ import javax.sql.DataSource;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,21 +20,19 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class DbEvolve {
 
     static final String DEFAULT_CLASSPATH_DIRECTORY = "sql";
     static final Pattern FILE_VERSION_PATTERN = Pattern.compile("V(\\d+)__.*");
-    static final Comparator<Path> VERSION_COMPARATOR = Comparator.comparingInt(DbEvolve::extractVersionFromFileName);
+    static final Comparator<String> VERSION_COMPARATOR = Comparator.comparingInt(DbEvolve::extractVersionFromFileName);
     private static final MessageDigest digest;
 
     static {
@@ -48,7 +45,6 @@ public class DbEvolve {
 
     private final DataSource dataSource;
     private final String classpathDirectory;
-    private final boolean insideJar;
     private final Logger logger;
 
     public DbEvolve(DataSource dataSource) {
@@ -59,7 +55,6 @@ public class DbEvolve {
         this.logger = logger != null ? logger : Logger.NO_OP;
         this.dataSource = dataSource;
         this.classpathDirectory = classpathDirectory;
-        this.insideJar = Objects.equals("jar", getClass().getResource("").getProtocol());
 
         createTablesIfNotExist();
     }
@@ -73,15 +68,13 @@ public class DbEvolve {
                 return false;
             }
 
-            FileSystem fileSystem = null;
-
             try {
-                fileSystem = getFileSystem();
-                List<Path> sqlFiles = walkSqlDirectory(sqlPath(fileSystem));
+                SortedSet<String> filenames = readFilenamesFromClasspath(classpathDirectory);
 
                 Map<String, String> sqlScriptsByName = selectAllFromDb(connection);
 
-                for (Path sqlFile : sqlFiles) {
+                for (String filename : filenames) {
+                    Path sqlFile = Paths.get(getResource(classpathDirectory + "/" + filename).toURI());
                     byte[] content = Files.readAllBytes(sqlFile);
                     String hash = hash(content);
 
@@ -99,10 +92,6 @@ public class DbEvolve {
                 }
             } finally {
                 unlock(connection);
-
-                if (insideJar && fileSystem != null) {
-                    fileSystem.close();
-                }
             }
         }
 
@@ -182,7 +171,7 @@ public class DbEvolve {
 
                 if (line.endsWith(delimiter)) {
                     int length = statement.length();
-                    statement.replace(length - delimiter.length()-1, length, ""); // remove delimiter
+                    statement.replace(length - delimiter.length() - 1, length, ""); // remove delimiter
                     statementExecutor.execute(statement.toString());
 
                     // reset
@@ -201,38 +190,36 @@ public class DbEvolve {
         execute(connection, statement);
     }
 
-    private FileSystem getFileSystem() throws URISyntaxException, IOException {
-        if (this.insideJar) {
-            return FileSystems.newFileSystem(this.getClass().getResource("").toURI(), Collections.emptyMap());
+    private SortedSet<String> readFilenamesFromClasspath(String path) throws IOException {
+        SortedSet<String> filenames = new TreeSet<>(VERSION_COMPARATOR);
+        try (InputStream in = getResourceAsStream(path)) {
+            if (in == null) {
+                throw new MigrationException(String.format("Directory %s not found on classpath", classpathDirectory));
+            }
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(in))) {
+                String resource;
+                while ((resource = br.readLine()) != null) {
+                    filenames.add(resource);
+                }
+            }
         }
-        return FileSystems.getDefault(); // inside ide
+        return filenames;
     }
 
-    private Path sqlPath(FileSystem fileSystem) throws URISyntaxException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        URL resource = classLoader.getResource(classpathDirectory);
-        if (resource == null) {
-            throw new MigrationException(String.format("No migrations found. Directory %s is not on classpath.", classpathDirectory));
-        }
-
-        if (insideJar) {
-            return fileSystem.getPath(classpathDirectory);
-        }
-
-        return Paths.get(resource.toURI());
+    private InputStream getResourceAsStream(String resource) {
+        final InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);
+        return in == null ? getClass().getResourceAsStream(resource) : in;
     }
 
-    private List<Path> walkSqlDirectory(Path path) throws IOException {
-        return Files.walk(path)
-                .filter(Files::isRegularFile)
-                .sorted(VERSION_COMPARATOR)
-                .collect(Collectors.toList());
+    private URL getResource(String resource) {
+        final URL url = Thread.currentThread().getContextClassLoader().getResource(resource);
+        return url == null ? getClass().getResource(resource) : url;
     }
 
-    private static int extractVersionFromFileName(Path path) {
-        Matcher matcher = FILE_VERSION_PATTERN.matcher(path.getFileName().toString());
+    private static int extractVersionFromFileName(String filename) {
+        Matcher matcher = FILE_VERSION_PATTERN.matcher(filename);
         if (!matcher.matches()) {
-            throw new MigrationException(String.format("File name %s does not meet the naming convention 'V<Version>__<Description>.sql'", path.getFileName()));
+            throw new MigrationException(String.format("File name %s does not meet the naming convention 'V<Version>__<Description>.sql'", filename));
         }
         return Integer.parseInt(matcher.group(1));
     }

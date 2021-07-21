@@ -58,11 +58,11 @@ public class DbEvolveShould {
 
     @Test
     void sort_migration_scripts_by_numeric_version() {
-        List<Path> unsortedList = Stream.of("V10__test.sql", "V2__test.sql", "V1__test.sql").map(Path::of).collect(Collectors.toList());
+        List<String> unsortedList = Stream.of("V10__test.sql", "V2__test.sql", "V1__test.sql").collect(Collectors.toList());
 
-        Collections.sort(unsortedList, DbEvolve.VERSION_COMPARATOR);
+        unsortedList.sort(DbEvolve.VERSION_COMPARATOR);
 
-        assertLinesMatch(List.of("V1__test.sql", "V2__test.sql", "V10__test.sql"), unsortedList.stream().map(Path::toString).collect(Collectors.toList()));
+        assertLinesMatch(List.of("V1__test.sql", "V2__test.sql", "V10__test.sql"), new ArrayList<>(unsortedList));
     }
 
     @Test

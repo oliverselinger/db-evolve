@@ -31,7 +31,7 @@ Inspired by [Dbolve](https://github.com/cinemast/dbolve) and [Flyway](https://fl
 <dependency>
     <groupId>com.github.oliverselinger</groupId>
     <artifactId>db-evolve</artifactId>
-    <version>0.6.1</version>
+    <version>0.6.2</version>
 </dependency>
 ```
 

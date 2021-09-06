@@ -227,12 +227,12 @@ public class DbEvolve {
     }
 
     private InputStream getResourceAsStream(String resource) {
-        final InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);
+        final InputStream in = getClass().getClassLoader().getResourceAsStream(resource);
         return in == null ? getClass().getResourceAsStream(resource) : in;
     }
 
     private URL getResource(String resource) {
-        final URL url = Thread.currentThread().getContextClassLoader().getResource(resource);
+        final URL url = getClass().getClassLoader().getResource(resource);
         return url == null ? getClass().getResource(resource) : url;
     }
 

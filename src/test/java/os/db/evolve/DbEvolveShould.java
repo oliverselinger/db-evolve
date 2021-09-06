@@ -10,6 +10,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -60,11 +61,11 @@ public class DbEvolveShould {
 
     @Test
     void sort_migration_scripts_by_numeric_version() {
-        List<String> unsortedList = Stream.of("V10__test.sql", "V2__test.sql", "V1__test.sql").collect(Collectors.toList());
+        List<Path> unsortedList = Stream.of("V10__test.sql", "V2__test.sql", "V1__test.sql").map(Paths::get).collect(Collectors.toList());
 
         unsortedList.sort(DbEvolve.VERSION_COMPARATOR);
 
-        assertLinesMatch(List.of("V1__test.sql", "V2__test.sql", "V10__test.sql"), new ArrayList<>(unsortedList));
+        assertLinesMatch(List.of("V1__test.sql", "V2__test.sql", "V10__test.sql"), unsortedList.stream().map(Path::toString).collect(Collectors.toList()));
     }
 
     @Test
